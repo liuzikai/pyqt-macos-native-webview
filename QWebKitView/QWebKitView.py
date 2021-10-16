@@ -22,19 +22,41 @@ import objc
 from Cocoa import NSObject, NSWindow, NSMakeRect, NSZeroRect, NSURL, NSURLRequest, NSError, \
     NSKeyValueObservingOptionNew, NSMakeSize
 from WebKit import WKWebView, WKWebViewConfiguration, WKPreferences, WKNavigation
-from PyQt6.QtWidgets import QWidget
-from PyQt6.QtWidgets import *
+from PyQt6.QtWidgets import QWidget, QHBoxLayout
 from PyQt6.QtGui import QResizeEvent, QWindow
-from PyQt6.QtGui import *
-from PyQt6.QtCore import QObject, QUrl, pyqtSignal, pyqtSlot
-from PyQt6.QtCore import *
+from PyQt6.QtCore import QUrl, pyqtSignal, pyqtSlot
 from typing import Optional, Callable, Any
 import weakref
+import enum
+
+
+class QWebKitProfile:
+    """
+    Wrapper class emulating QWebEngineProfile.
+    """
+
+    def setHttpUserAgent(self, userAgent: str) -> None:
+        print("Warning: QWebKitProfile.setHttpUserAgent is not implemented", file=sys.stderr)
+
+    def setProperty(self, p_str, Any):
+        print("Warning: QWebKitProfile.setProperty is not implemented", file=sys.stderr)
+
+
+class QWebKitSettings:
+    """
+    Wrapper class emulating QWebEngineSettings.
+    """
+
+    class WebAttribute(enum.Enum):
+        FocusOnNavigationEnabled = 0
+
+    def setAttribute(self, attr: WebAttribute, on: bool) -> None:
+        print("Warning: QWebKitSettings.setAttribute is not implemented", file=sys.stderr)
 
 
 class QWebKitPage:
     """
-    Wrapper class emulating QWebEnginePage API.
+    Wrapper class emulating QWebEnginePage.
     """
 
     def __init__(self, wv: WKWebView) -> None:
@@ -56,12 +78,26 @@ class QWebKitPage:
                 callback(error)
 
     def url(self) -> QUrl:
-        return QUrl(self._wv.URL().absoluteString())
+        if self._wv() and self._wv().URL():
+            return QUrl(self._wv().URL().absoluteString())
+        else:
+            return QUrl()
+
+    def profile(self) -> QWebKitProfile:
+        return QWebKitProfile()
+
+
+class _WKWebView(WKWebView):
+    def becomeFirstResponder(self):
+        if self.isLoading():
+            return False
+        else:
+            return super(_WKWebView, self).becomeFirstResponder()
 
 
 class QWebKitView(QWidget):
     """
-    Wrapper class of macOS WebKit WKWebView, emulating QWebEngineView API.
+    Wrapper class of macOS WebKit WKWebView, emulating QWebEngineView.
     """
 
     # Signals
@@ -78,7 +114,7 @@ class QWebKitView(QWidget):
         self._config.preferences().setJavaEnabled_(True)
 
         # Create WKWebView
-        self._wv = WKWebView.alloc().initWithFrame_configuration_(NSZeroRect, self._config)
+        self._wv = _WKWebView.alloc().initWithFrame_configuration_(NSZeroRect, self._config)
         self._wv.setFrameSize_(NSMakeSize(self.size().width(), self.size().height()))
 
         # Create wrappers
@@ -111,9 +147,13 @@ class QWebKitView(QWidget):
         if self._wv:
             self._wv.setFrameSize_(NSMakeSize(event.size().width(), event.size().height()))
 
-    def load(self, url: QUrl):
+    def load(self, url: QUrl) -> None:
         u = NSURL.URLWithString_(url.toString())
+        if u is None:
+            print(f"Error: invalid url '{url.toString()}'", file=sys.stderr)
+            return
         r = NSURLRequest.requestWithURL_(u)
+        assert u is not None, "failed to translate NSURL to NSURLRequest"
         self._wv.loadRequest_(r)
 
     @pyqtSlot()
@@ -164,6 +204,9 @@ class QWebKitView(QWidget):
     def page(self) -> QWebKitPage:
         return self._page
 
+    def settings(self) -> QWebKitSettings:
+        return QWebKitSettings()
+
 
 class _QWebKitViewObserver(NSObject):
     """
@@ -200,31 +243,3 @@ class _QWebKitViewObserver(NSObject):
         # https://developer.apple.com/documentation/objectivec/nsobject/1416553-observevalueforkeypath?language=objc
         if self._wkv:
             self._wkv._progress_changed(keyPath, object, change, context)
-
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-
-    toplevel = QWidget()
-    toplevel.resize(640, 480)
-    toplevel.setWindowTitle("QWidget with createWindowContainer-managed Metal Window")
-
-    config = WKWebViewConfiguration.new()
-    config.setPreferences_(WKPreferences.new())
-    # config.preferences().setJavaEnabled_(True)
-    #
-    wv = WKWebView.alloc().initWithFrame_configuration_(NSZeroRect, config)
-    window = QWindow.fromWinId(wv.__c_void_p__().value)
-    # container = QWidget.createWindowContainer(window)
-    # container.show()
-
-    # toplevel.
-    # layout
-
-    toplevel.show()
-
-    u = NSURL.URLWithString_("https://www.apple.com")
-    r = NSURLRequest.requestWithURL_(u)
-    wv.loadRequest_(r)
-
-    app.exec()
