@@ -87,14 +87,6 @@ class QWebKitPage:
         return QWebKitProfile()
 
 
-class _WKWebView(WKWebView):
-    def becomeFirstResponder(self):
-        if self.isLoading():
-            return False
-        else:
-            return super(_WKWebView, self).becomeFirstResponder()
-
-
 class QWebKitView(QWidget):
     """
     Wrapper class of macOS WebKit WKWebView, emulating QWebEngineView.
@@ -114,7 +106,7 @@ class QWebKitView(QWidget):
         self._config.preferences().setJavaEnabled_(True)
 
         # Create WKWebView
-        self._wv = _WKWebView.alloc().initWithFrame_configuration_(NSZeroRect, self._config)
+        self._wv = WKWebView.alloc().initWithFrame_configuration_(NSZeroRect, self._config)
         self._wv.setFrameSize_(NSMakeSize(self.size().width(), self.size().height()))
 
         # Create wrappers
